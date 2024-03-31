@@ -66,7 +66,7 @@ macro_rules! api {
             let template = concat!("https://my.tado.com/api/v2/", $path);
             let url = template.replace("{home}", &self.get_me()?.homes[0].id.to_string());
 
-            $(let url = url.replace(stringify!({$dyn_param}), $dyn_param.to_string().as_str());)*
+            $(let url = url.replace(concat!("{", stringify!($dyn_param), "}"), $dyn_param.to_string().as_str());)*
 
             response!(self, $method, url, payload)
         }
@@ -136,7 +136,6 @@ impl Client {
                         return Ok(token.access_token().clone());
                     }
                 } else {
-                    dbg!("No expiration");
                     return Err(Error::InvalidAuth);
                 }
             }
@@ -298,9 +297,10 @@ impl Client {
         "timeoutInSeconds": timeout,
     }, "homes/{home}/zones/{zone}/openWindowDetection", zone: u32, enabled: bool, timeout: u32);
 
+    // TODO: Type unknown
     api!(
         get_default_overlay,
-        String,
+        Value,
         "homes/{home}/zones/{zone}/defaultOverlay",
         zone: u32
     );
@@ -325,7 +325,7 @@ impl Client {
         "homePresence": presence
     }, "homes/{home}/presenceLock", presence: StatePresence);
 
-    api!(set_identify, (), Method::POST, null, "devices/{device}/identify", device: String);
+    api!(set_identify, Value, Method::POST, null, "devices/{device}/identify", device: &String);
 
     api!(set_child_lock, (), Method::PUT, {
         "childLockEnabled": enabled
