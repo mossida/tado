@@ -1,7 +1,10 @@
 use std::time::Instant;
 
 use cnf::AUTH_SCOPE;
-use data::{Device, Home, StatePresence, User};
+use data::{
+    AirComfort, AwayConfiguration, Device, DeviceUsage, EarlyStart, HeatingCircuit, HeatingSystem,
+    Home, HomeState, MobileDevice, StatePresence, Temperature, User, Weather, Zone, ZoneState,
+};
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
     reqwest::async_http_client,
@@ -203,49 +206,97 @@ impl Client {
 
     api!(get_home, Home, "homes/{home}");
 
-    api!(get_home_state, StatePresence, "homes/{home}/state");
+    api!(get_home_state, HomeState, "homes/{home}/state");
 
     api!(get_devices, Vec<Device>, "homes/{home}/devices");
 
-    api!(get_device_usage, String, "homes/{home}/deviceList");
+    api!(get_device_usage, DeviceUsage, "homes/{home}/deviceList");
 
-    api!(get_invitations, String, "homes/{home}/invitations");
+    api!(get_invitations, Vec<Value>, "homes/{home}/invitations");
 
-    api!(get_mobile_devices, String, "homes/{home}/mobileDevices");
+    api!(set_invitation, (), Method::POST, {
+        "email": email
+    }, "homes/{home}/invitations", email: String);
 
-    api!(get_users, String, "homes/{home}/users");
+    api!(delete_invitation, (), Method::DELETE, null, "homes/{home}/invitations/{invitation}", token: String);
 
-    api!(get_weather, String, "homes/{home}/weather");
+    api!(
+        get_mobile_devices,
+        Vec<MobileDevice>,
+        "homes/{home}/mobileDevices"
+    );
 
-    api!(get_zones, String, "homes/{home}/zones");
+    api!(get_users, Vec<User>, "homes/{home}/users");
 
-    api!(get_early_start, String, "homes/{home}/zones/{zone}/earlyStart", zone: u32);
+    api!(get_weather, Weather, "homes/{home}/weather");
 
-    api!(get_zone_states, String, "homes/{home}/zoneStates");
+    api!(get_zones, Vec<Zone>, "homes/{home}/zones");
 
-    api!(get_heating_circuits, String, "homes/{home}/heatingCircuits");
+    api!(get_early_start, EarlyStart, "homes/{home}/zones/{zone}/earlyStart", zone: u32);
 
-    api!(get_incidents, String, "homes/{home}/incidents");
+    api!(set_early_start, (), Method::PUT, {
+        "enabled": enabled
+    }, "homes/{home}/zones/{zone}/earlyStart", zone: u32, enabled: bool);
 
-    api!(get_installtions, String, "homes/{home}/installations");
+    api!(end_manual_control, (), Method::DELETE, null, "homes/{home}/zones/{zone}/overlay", zone: u32);
 
-    api!(get_air_comfort, String, "homes/{home}/airComfort");
+    api!(get_zone_states, Vec<ZoneState>, "homes/{home}/zoneStates");
 
-    api!(get_heating_system, String, "homes/{home}/heatingSystem");
+    api!(
+        get_heating_circuits,
+        Vec<HeatingCircuit>,
+        "homes/{home}/heatingCircuits"
+    );
+
+    // TODO: Type unknown
+    // TODO: Use minder API
+    api!(get_incidents, Value, "homes/{home}/incidents");
+
+    api!(set_incident_detection, (), Method::PUT, {
+        "enabled": enabled
+    }, "homes/{home}/incidentDetection", enabled: bool);
+
+    // TODO: Type unknown
+    api!(get_installtions, Value, "homes/{home}/installations");
+
+    api!(get_air_comfort, AirComfort, "homes/{home}/airComfort");
+
+    api!(
+        get_heating_system,
+        HeatingSystem,
+        "homes/{home}/heatingSystem"
+    );
 
     api!(
         get_temperature_offset,
-        Value,
+        Temperature,
         "device/{device}/temperatureOffset",
         device: String
     );
 
     api!(
+        set_temperature_offset,
+        Temperature,
+        Method::PUT,
+        {
+            "celsius": offset
+        },
+        "device/{device}/temperatureOffset",
+        device: String,
+        offset: f32
+    );
+
+    api!(
         get_away_configuration,
-        String,
+        AwayConfiguration,
         "homes/{home}/zones/{zone}/awayConfiguration",
         zone: u32
     );
+
+    api!(set_open_window_detection, (), Method::PUT, {
+        "enabled": enabled,
+        "timeoutInSeconds": timeout,
+    }, "homes/{home}/zones/{zone}/openWindowDetection", zone: u32, enabled: bool, timeout: u32);
 
     api!(
         get_default_overlay,
@@ -256,13 +307,27 @@ impl Client {
 
     api!(get_measuring_device, String, "homes/{home}/zones/{zone}/measuringDevice", zone: u32);
 
-    api!(get_state, String, "homes/{home}/zones/{zone}/state", zone: u32);
+    api!(get_state, ZoneState, "homes/{home}/zones/{zone}/state", zone: u32);
+
+    api!(set_zone_name, (), Method::PUT, {
+        "name": name
+    }, "homes/{home}/zones/{zone}/name", zone: u32, name: String);
 
     api!(get_schedule, String, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32);
 
+    api!(set_schedule, (), Method::PUT, {
+        "id": schedule
+    }, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32, schedule: u32);
+
     api!(get_schedule_timetables, String, "homes/{home}/zones/{zone}/schedule/timetables", zone: u32);
 
-    api!(set_presence, (), Method::PUT, {
-        "homePresence": at_home
-    }, "homes/{home}/presenceLock", at_home: StatePresence);
+    api!(set_presence, Value, Method::PUT, {
+        "homePresence": presence
+    }, "homes/{home}/presenceLock", presence: StatePresence);
+
+    api!(set_identify, (), Method::POST, null, "devices/{device}/identify", device: String);
+
+    api!(set_child_lock, (), Method::PUT, {
+        "childLockEnabled": enabled
+    }, "devices/{device}/childLock", device: String, enabled: bool);
 }
