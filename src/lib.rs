@@ -3,7 +3,8 @@ use std::time::Instant;
 use cnf::AUTH_SCOPE;
 use data::{
     AirComfort, AwayConfiguration, Device, DeviceUsage, EarlyStart, HeatingCircuit, HeatingSystem,
-    Home, HomeState, MobileDevice, StatePresence, Temperature, User, Weather, Zone, ZoneState,
+    Home, HomeState, MobileDevice, MobileDeviceSettings, StatePresence, Temperature, User, Weather,
+    Zone, ZoneState,
 };
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
@@ -213,6 +214,7 @@ impl Client {
 
     api!(get_invitations, Vec<Value>, "homes/{home}/invitations");
 
+    // TODO: Add return type
     api!(set_invitation, (), Method::POST, {
         "email": email
     }, "homes/{home}/invitations", email: String);
@@ -225,6 +227,13 @@ impl Client {
         "homes/{home}/mobileDevices"
     );
 
+    api!(
+        get_mobile_device_settings,
+        MobileDeviceSettings,
+        "homes/{home}/mobileDevices/{device}/settings",
+        device: String
+    );
+
     api!(get_users, Vec<User>, "homes/{home}/users");
 
     api!(get_weather, Weather, "homes/{home}/weather");
@@ -233,7 +242,7 @@ impl Client {
 
     api!(get_early_start, EarlyStart, "homes/{home}/zones/{zone}/earlyStart", zone: u32);
 
-    api!(set_early_start, (), Method::PUT, {
+    api!(set_early_start, EarlyStart, Method::PUT, {
         "enabled": enabled
     }, "homes/{home}/zones/{zone}/earlyStart", zone: u32, enabled: bool);
 
@@ -251,6 +260,7 @@ impl Client {
     // TODO: Use minder API
     api!(get_incidents, Value, "homes/{home}/incidents");
 
+    // TODO: Add return type
     api!(set_incident_detection, (), Method::PUT, {
         "enabled": enabled
     }, "homes/{home}/incidentDetection", enabled: bool);
@@ -269,7 +279,7 @@ impl Client {
     api!(
         get_temperature_offset,
         Temperature,
-        "device/{device}/temperatureOffset",
+        "devices/{device}/temperatureOffset",
         device: String
     );
 
@@ -280,7 +290,7 @@ impl Client {
         {
             "celsius": offset
         },
-        "device/{device}/temperatureOffset",
+        "devices/{device}/temperatureOffset",
         device: String,
         offset: f32
     );
@@ -309,24 +319,29 @@ impl Client {
 
     api!(get_state, ZoneState, "homes/{home}/zones/{zone}/state", zone: u32);
 
+    // TODO: Add return type
     api!(set_zone_name, (), Method::PUT, {
         "name": name
     }, "homes/{home}/zones/{zone}/name", zone: u32, name: String);
 
     api!(get_schedule, String, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32);
 
+    // TODO: Add return type
     api!(set_schedule, (), Method::PUT, {
         "id": schedule
     }, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32, schedule: u32);
 
     api!(get_schedule_timetables, String, "homes/{home}/zones/{zone}/schedule/timetables", zone: u32);
 
+    // TODO: Add return type
     api!(set_presence, Value, Method::PUT, {
         "homePresence": presence
     }, "homes/{home}/presenceLock", presence: StatePresence);
 
+    // TODO: Add return type
     api!(set_identify, Value, Method::POST, null, "devices/{device}/identify", device: &String);
 
+    // TODO: Add return type
     api!(set_child_lock, (), Method::PUT, {
         "childLockEnabled": enabled
     }, "devices/{device}/childLock", device: String, enabled: bool);
