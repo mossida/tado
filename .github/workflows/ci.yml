@@ -1,5 +1,3 @@
-# Partially based on https://github.com/surrealdb/surrealdb/blob/main/.github/workflows/ci.yml
-
 name: "Continuous Integration"
 run-name: "CI run '${{ github.head_ref || github.ref_name }}'"
 
@@ -10,6 +8,7 @@ on:
   pull_request_target:
     branches:
       - main
+      - 'release-*'
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -19,6 +18,7 @@ jobs:
   format:
     name: Check code formatting
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release-') == false
     steps:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -43,6 +43,7 @@ jobs:
   clippy:
     name: Check code lints
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release-') == false
     steps:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -66,6 +67,7 @@ jobs:
   audit:
     name: Check dependencies issues
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release-') == false
     steps:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -89,6 +91,7 @@ jobs:
   workspace:
     name: Check workspace
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/heads/release-') == false
     steps:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
