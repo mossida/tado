@@ -1,4 +1,3 @@
-workspace = { members = ["examples/basic"] }
 [package]
 name = "tado"
 description = "A simple library to interact with the Tado API"

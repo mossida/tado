@@ -23,7 +23,7 @@ use tado::{Auth, Client, Configuration};
 
 #[tokio::main]
 async fn main() {
-    let mut client = Client::new(Configuration {
+    let client = Client::new(Configuration {
         auth: Auth {
             username: "x".to_string(),
             password: "x".to_string(),

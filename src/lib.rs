@@ -141,7 +141,7 @@ struct AuthSession {
 pub struct Client {
     inner: HttpClient,
     oauth: BasicClient,
-    session: Option<Mutex<AuthSession>>,
+    session: Mutex<Option<AuthSession>>,
     configuration: Configuration,
 }
 
@@ -151,10 +151,9 @@ impl Client {
     }
 
     async fn token(&self) -> Result<AccessToken, Error> {
-        match &self.session {
-            Some(session_lock) => {
-                let mut session = session_lock.lock().await;
-
+        let mut session = self.session.lock().await;
+        match session.as_mut() {
+            Some(session) => {
                 match session.token.expires_in() {
                     Some(expiration)
                         if session.instant.elapsed().as_secs() < expiration.as_secs() =>
@@ -193,12 +192,12 @@ impl Client {
         Self {
             oauth,
             inner: builder.build().unwrap(),
-            session: None,
+            session: Mutex::new(None),
             configuration,
         }
     }
 
-    pub async fn login(&mut self) -> Result<(), Error> {
+    pub async fn login(&self) -> Result<(), Error> {
         let token = self
             .oauth
             .exchange_password(
@@ -220,12 +219,13 @@ impl Client {
             .await?;
 
         let user = response.json::<User>().await?;
+        let mut session = self.session.lock().await;
 
-        self.session = Some(Mutex::new(AuthSession {
+        let _ = session.insert(AuthSession {
             user,
             token,
             instant: Instant::now(),
-        }));
+        });
 
         Ok(())
     }
@@ -233,8 +233,8 @@ impl Client {
 
 impl Client {
     pub async fn get_me(&self) -> Result<User, Error> {
-        let session_lock = self.session.as_ref().ok_or(Error::InvalidAuth)?;
-        let session = session_lock.lock().await;
+        let guard = self.session.lock().await;
+        let session = guard.as_ref().ok_or(Error::InvalidAuth)?;
 
         Ok(session.user.clone())
     }

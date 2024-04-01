@@ -1,4 +1,5 @@
 name: Release
+run-name: "Release on '${{ github.head_ref || github.ref_name }}'"
 
 permissions:
   pull-requests: write
