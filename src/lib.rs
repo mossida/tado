@@ -3,8 +3,8 @@ use std::time::Instant;
 use cnf::{API_URL, AUTH_SCOPE, AUTH_URL};
 use data::{
     AirComfort, AwayConfiguration, Device, DeviceUsage, EarlyStart, HeatingCircuit, HeatingSystem,
-    Home, HomeState, MobileDevice, MobileDeviceSettings, StatePresence, Temperature, User, Weather,
-    Zone, ZoneId, ZoneState,
+    Home, HomeState, Invitation, MobileDevice, MobileDeviceSettings, StatePresence, Temperature,
+    User, Weather, Zone, ZoneId, ZoneState,
 };
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
@@ -12,7 +12,7 @@ use oauth2::{
     AccessToken, AuthUrl, ClientId, ClientSecret, EmptyExtraTokenFields, ResourceOwnerPassword,
     ResourceOwnerUsername, Scope, StandardTokenResponse, TokenResponse, TokenUrl,
 };
-use reqwest::{Client as HttpClient, Method, RequestBuilder};
+use reqwest::{Client as HttpClient, ClientBuilder, Method, RequestBuilder};
 use serde_json::{json, Value};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -26,7 +26,12 @@ macro_rules! response {
     ($self:expr, $method:expr, $url:tt) => {{
         let token = $self.token().await?;
         let response = $self.build($method, &$url, &token).send().await?;
-        Ok(response.json().await?)
+
+        if response.status().is_success() {
+            Ok(response.json().await?)
+        } else {
+            Err(Error::UnsuccesfulOperation(response.json().await?))
+        }
     }};
 
     ($self:expr, $method:expr, $url:tt, $payload:tt) => {{
@@ -38,7 +43,11 @@ macro_rules! response {
             .send()
             .await?;
 
-        Ok(response.json().await?)
+        if response.status().is_success() {
+            Ok(response.json().await?)
+        } else {
+            Err(Error::UnsuccesfulOperation(response.json().await?))
+        }
     }};
 }
 
@@ -63,6 +72,34 @@ macro_rules! api {
         }
     };
 
+    // Special case where we don't need to return anything
+    // So json deserialize is not needed otherwise it would fail
+    ($name:ident, $method:expr, $payload:tt, $path:literal $(, $dyn_param:ident: $dyn_type:ty)*) => {
+        pub async fn $name(&self $(, $dyn_param: $dyn_type)*) -> Result<(), Error> {
+            let payload = json!($payload);
+            let template = format!("{}{}", API_URL, $path);
+            let url = template.replace("{home}", &self.get_me().await?.homes[0].id.to_string());
+
+            $(let url = url.replace(concat!("{", stringify!($dyn_param), "}"), $dyn_param.to_string().as_str());)*
+
+            let token = self.token().await?;
+            let response = self
+                .build($method, &url, &token)
+                .json(&payload)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                // Still consume the response
+                let _ = response.text().await?;
+
+                Ok(())
+            } else {
+                Err(Error::UnsuccesfulOperation(response.json().await?))
+            }
+        }
+    };
+
     ($name:ident, $data:ty, $method:expr, $payload:tt, $path:literal $(, $dyn_param:ident: $dyn_type:ty)*) => {
         pub async fn $name(&self $(, $dyn_param: $dyn_type)*) -> Result<$data, Error> {
             let payload = json!($payload);
@@ -82,6 +119,8 @@ pub enum Error {
     Request(#[from] reqwest::Error),
     #[error("Invalid authentication, are you sure you made login?")]
     InvalidAuth,
+    #[error("Failed to execute operation: {0}")]
+    UnsuccesfulOperation(Value),
 }
 
 pub struct Auth {
@@ -112,7 +151,6 @@ impl Client {
     }
 
     async fn token(&self) -> Result<AccessToken, Error> {
-        // TODO: Correctly handle errors
         match &self.session {
             Some(session_lock) => {
                 let mut session = session_lock.lock().await;
@@ -150,9 +188,11 @@ impl Client {
             Some(TokenUrl::new(AUTH_URL.to_string()).unwrap()),
         );
 
+        let builder = ClientBuilder::new();
+
         Self {
             oauth,
-            inner: HttpClient::new(),
+            inner: builder.build().unwrap(),
             session: None,
             configuration,
         }
@@ -209,16 +249,13 @@ impl Client {
 
     api!(get_device_usage, DeviceUsage, "homes/{home}/deviceList");
 
-    // TODO: Add return type
-    api!(get_invitations, Vec<Value>, "homes/{home}/invitations");
+    api!(get_invitations, Vec<Invitation>, "homes/{home}/invitations");
 
-    // TODO: Add return type
-    api!(set_invitation, (), Method::POST, {
+    api!(set_invitation, Invitation, Method::POST, {
         "email": email
     }, "homes/{home}/invitations", email: String);
 
-    // TODO: Add return type
-    api!(delete_invitation, (), Method::DELETE, null, "homes/{home}/invitations/{invitation}", token: String);
+    api!(delete_invitation, Method::DELETE, null, "homes/{home}/invitations/{invitation}", token: String);
 
     api!(
         get_mobile_devices,
@@ -243,7 +280,7 @@ impl Client {
         "enabled": enabled
     }, "homes/{home}/zones/{zone}/earlyStart", zone: &ZoneId, enabled: bool);
 
-    api!(end_manual_control, (), Method::DELETE, null, "homes/{home}/zones/{zone}/overlay", zone: &ZoneId);
+    api!(end_manual_control, Method::DELETE, null, "homes/{home}/zones/{zone}/overlay", zone: &ZoneId);
 
     api!(get_zone_states, Vec<ZoneState>, "homes/{home}/zoneStates");
 
@@ -257,8 +294,7 @@ impl Client {
     // TODO: Use minder API
     api!(get_incidents, Value, "homes/{home}/incidents");
 
-    // TODO: Add return type
-    api!(set_incident_detection, (), Method::PUT, {
+    api!(set_incident_detection, Method::PUT, {
         "enabled": enabled
     }, "homes/{home}/incidentDetection", enabled: bool);
 
@@ -299,7 +335,7 @@ impl Client {
         zone: &ZoneId
     );
 
-    api!(set_open_window_detection, (), Method::PUT, {
+    api!(set_open_window_detection, Method::PUT, {
         "enabled": enabled,
         "timeoutInSeconds": timeout,
     }, "homes/{home}/zones/{zone}/openWindowDetection", zone: &ZoneId, enabled: bool, timeout: u32);
@@ -330,16 +366,13 @@ impl Client {
 
     api!(get_schedule_timetables, String, "homes/{home}/zones/{zone}/schedule/timetables", zone: &u32);
 
-    // TODO: Add return type
-    api!(set_presence, Value, Method::PUT, {
+    api!(set_presence, Method::PUT, {
         "homePresence": presence
     }, "homes/{home}/presenceLock", presence: StatePresence);
 
-    // TODO: Add return type
-    api!(set_identify, Value, Method::POST, null, "devices/{device}/identify", device: &String);
+    api!(set_identify, Method::POST, null, "devices/{device}/identify", device: &String);
 
-    // TODO: Add return type
-    api!(set_child_lock, (), Method::PUT, {
+    api!(set_child_lock, Method::PUT, {
         "childLockEnabled": enabled
-    }, "devices/{device}/childLock", device: String, enabled: bool);
+    }, "devices/{device}/childLock", device: &String, enabled: bool);
 }

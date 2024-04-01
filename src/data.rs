@@ -123,6 +123,15 @@ new_type! [Device {
     in_pairing_mode: Option<bool>,
 }];
 
+new_type![Invitation {
+    token: String,
+    email: String,
+    first_sent: Date,
+    last_sent: Date,
+    inviter: User,
+    home: Home,
+}];
+
 new_type![MobileDeviceLocationBearingFromHome {
     degrees: f32,
     radians: f32,
