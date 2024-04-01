@@ -2,7 +2,7 @@ workspace = { members = ["examples/basic"] }
 [package]
 name = "tado"
 description = "A simple library to interact with the Tado API"
-version = "0.1.0"
+version = "1.0.0"
 
 license = "Apache-2.0"
 repository = "https://github.com/mossida/tado"
