@@ -121,6 +121,7 @@ new_type! [Device {
     orientation: Option<DeviceOrientation>,
     child_lock_enabled: Option<bool>,
     in_pairing_mode: Option<bool>,
+    is_driver_configured: Option<bool>,
 }];
 
 new_type![Invitation {
