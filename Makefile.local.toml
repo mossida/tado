@@ -1,0 +1,20 @@
+[tasks.cargo-fmt]
+command = "cargo"
+args = ["fmt", "--all", "--check"]
+
+[tasks.cargo-audit]
+command = "cargo"
+args = ["audit"]
+
+[tasks.cargo-clippy]
+command = "cargo"
+args = ["clippy", "--all-targets", "--all-features", "--", "-D", "warnings"]
+
+[tasks.clean]
+category = "Local commands"
+command = "cargo"
+args = ["clean"]
+
+[tasks.check]
+category = "Local commands"
+dependencies = ["cargo-fmt", "cargo-audit", "cargo-clippy"]

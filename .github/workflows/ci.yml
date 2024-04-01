@@ -1,0 +1,110 @@
+# Partially based on https://github.com/surrealdb/surrealdb/blob/main/.github/workflows/ci.yml
+
+name: "Continuous Integration"
+run-name: "CI run '${{ github.head_ref || github.ref_name }}'"
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  format:
+    name: Check code formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install required packages
+        run: cargo install --debug --locked cargo-make
+
+      - name: Run ci:format
+        run: cargo make ci-format
+
+  clippy:
+    name: Check code lints
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install required packages
+        run: cargo install --debug --locked cargo-make
+
+      - name: Run ci:clippy
+        run: cargo make ci-clippy
+
+  audit:
+    name: Check dependencies issues
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install required packages
+        run: cargo install --debug --locked cargo-make cargo-audit
+
+      - name: Run ci:audit
+        run: cargo make ci-audit
+
+  workspace:
+    name: Check workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Checkout sources
+        uses: actions/checkout@v4
+
+      - name: Setup cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install required packages
+        run: cargo install --debug --locked cargo-make
+
+      - name: Run ci:check
+        run: cargo make ci-check

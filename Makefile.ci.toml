@@ -1,0 +1,16 @@
+[tasks.ci-format]
+category = "CI - Checks"
+dependencies = ["cargo-fmt"]
+
+[tasks.ci-clippy]
+category = "CI - Checks"
+dependencies = ["cargo-clippy"]
+
+[tasks.ci-check]
+category = "CI - Checks"
+command = "cargo"
+args = ["check", "--locked", "--workspace"]
+
+[tasks.ci-audit]
+category = "CI - Checks"
+dependencies = ["cargo-audit"]
