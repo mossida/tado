@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use cnf::AUTH_SCOPE;
+use cnf::{API_URL, AUTH_SCOPE, AUTH_URL};
 use data::{
     AirComfort, AwayConfiguration, Device, DeviceUsage, EarlyStart, HeatingCircuit, HeatingSystem,
     Home, HomeState, MobileDevice, MobileDeviceSettings, StatePresence, Temperature, User, Weather,
@@ -15,6 +15,7 @@ use oauth2::{
 use reqwest::{Client as HttpClient, Method, RequestBuilder};
 use serde_json::{json, Value};
 use thiserror::Error;
+use tokio::sync::Mutex;
 
 use crate::cnf::{CLIENT_ID, CLIENT_SECRET};
 
@@ -23,15 +24,16 @@ pub mod data;
 
 macro_rules! response {
     ($self:expr, $method:expr, $url:tt) => {{
-        let response = $self.build($method, &$url).await?.send().await?;
+        let token = $self.token().await?;
+        let response = $self.build($method, &$url, &token).send().await?;
         Ok(response.json().await?)
     }};
 
     ($self:expr, $method:expr, $url:tt, $payload:tt) => {{
         let payload = json!($payload);
+        let token = $self.token().await?;
         let response = $self
-            .build($method, &$url)
-            .await?
+            .build($method, &$url, &token)
             .json(&payload)
             .send()
             .await?;
@@ -42,18 +44,18 @@ macro_rules! response {
 
 macro_rules! api {
     ($name:ident, $data:ty, $path:literal) => {
-        pub async fn $name(&mut self) -> Result<$data, Error> {
-            let url = concat!("https://my.tado.com/api/v2/", $path);
-            let url = url.replace("{home}", &self.get_me()?.homes[0].id.to_string());
+        pub async fn $name(&self) -> Result<$data, Error> {
+            let url = format!("{}{}", API_URL, $path);
+            let url = url.replace("{home}", &self.get_me().await?.homes[0].id.to_string());
 
             response!(self, Method::GET, url)
         }
     };
 
     ($name:ident, $data:ty, $path:literal $(, $dyn_param:ident: $dyn_type:ty)*) => {
-        pub async fn $name(&mut self $(, $dyn_param: $dyn_type)*) -> Result<$data, Error> {
-            let template = concat!("https://my.tado.com/api/v2/", $path);
-            let url = template.replace("{home}", &self.get_me()?.homes[0].id.to_string());
+        pub async fn $name(&self $(, $dyn_param: $dyn_type)*) -> Result<$data, Error> {
+            let template = format!("{}{}", API_URL, $path);
+            let url = template.replace("{home}", &self.get_me().await?.homes[0].id.to_string());
 
             $(let url = url.replace(concat!("{", stringify!($dyn_param), "}"), $dyn_param.to_string().as_str());)*
 
@@ -62,10 +64,10 @@ macro_rules! api {
     };
 
     ($name:ident, $data:ty, $method:expr, $payload:tt, $path:literal $(, $dyn_param:ident: $dyn_type:ty)*) => {
-        pub async fn $name(&mut self $(, $dyn_param: $dyn_type)*) -> Result<$data, Error> {
+        pub async fn $name(&self $(, $dyn_param: $dyn_type)*) -> Result<$data, Error> {
             let payload = json!($payload);
-            let template = concat!("https://my.tado.com/api/v2/", $path);
-            let url = template.replace("{home}", &self.get_me()?.homes[0].id.to_string());
+            let template = format!("{}{}", API_URL, $path);
+            let url = template.replace("{home}", &self.get_me().await?.homes[0].id.to_string());
 
             $(let url = url.replace(concat!("{", stringify!($dyn_param), "}"), $dyn_param.to_string().as_str());)*
 
@@ -100,45 +102,38 @@ struct AuthSession {
 pub struct Client {
     inner: HttpClient,
     oauth: BasicClient,
-    session: Option<AuthSession>,
+    session: Option<Mutex<AuthSession>>,
     configuration: Configuration,
 }
 
 impl Client {
-    async fn build(&mut self, method: Method, url: &str) -> Result<RequestBuilder, Error> {
-        let token = self.token().await?;
-        let builder = self.inner.request(method, url).bearer_auth(token.secret());
-
-        Ok(builder)
+    fn build(&self, method: Method, url: &str, token: &AccessToken) -> RequestBuilder {
+        self.inner.request(method, url).bearer_auth(token.secret())
     }
 
-    async fn token(&mut self) -> Result<AccessToken, Error> {
+    async fn token(&self) -> Result<AccessToken, Error> {
         // TODO: Correctly handle errors
-        match &mut self.session {
-            Some(session) => {
-                let AuthSession {
-                    user: _,
-                    token,
-                    instant,
-                } = session;
+        match &self.session {
+            Some(session_lock) => {
+                let mut session = session_lock.lock().await;
 
-                if let Some(expiration) = token.expires_in() {
-                    if instant.elapsed().as_secs() < expiration.as_secs() {
-                        return Ok(token.access_token().clone());
-                    } else {
-                        *token = self
+                match session.token.expires_in() {
+                    Some(expiration)
+                        if session.instant.elapsed().as_secs() < expiration.as_secs() =>
+                    {
+                        session.token = self
                             .oauth
-                            .exchange_refresh_token(token.refresh_token().unwrap())
+                            .exchange_refresh_token(session.token.refresh_token().unwrap())
                             .request_async(async_http_client)
                             .await
-                            .unwrap();
+                            .map_err(|_| Error::InvalidAuth)?;
 
-                        *instant = Instant::now();
-                        return Ok(token.access_token().clone());
+                        session.instant = Instant::now();
                     }
-                } else {
-                    return Err(Error::InvalidAuth);
-                }
+                    _ => {}
+                };
+
+                Ok(session.token.access_token().clone())
             }
             _ => Err(Error::InvalidAuth),
         }
@@ -150,8 +145,9 @@ impl Client {
         let oauth = BasicClient::new(
             ClientId::new(CLIENT_ID.to_string()),
             Some(ClientSecret::new(CLIENT_SECRET.to_string())),
-            AuthUrl::new("https://auth.tado.com/oauth/token".to_string()).unwrap(),
-            Some(TokenUrl::new("https://auth.tado.com/oauth/token".to_string()).unwrap()),
+            // Safe to unwrap as we know the URL is correct
+            AuthUrl::new(AUTH_URL.to_string()).unwrap(),
+            Some(TokenUrl::new(AUTH_URL.to_string()).unwrap()),
         );
 
         Self {
@@ -172,36 +168,35 @@ impl Client {
             .add_scope(Scope::new(AUTH_SCOPE.to_string()))
             .request_async(async_http_client)
             .await
-            .unwrap();
+            .map_err(|_| Error::InvalidAuth)?;
 
-        // Cannot use internal build as we didn't create the session yet
         let response = self
-            .inner
-            .request(Method::GET, "https://my.tado.com/api/v2/me")
-            .bearer_auth(token.access_token().secret())
+            .build(
+                Method::GET,
+                format!("{}me", API_URL).as_str(),
+                token.access_token(),
+            )
             .send()
             .await?;
 
-        dbg!(token.access_token().secret());
-
         let user = response.json::<User>().await?;
 
-        self.session = Some(AuthSession {
+        self.session = Some(Mutex::new(AuthSession {
             user,
             token,
             instant: Instant::now(),
-        });
+        }));
 
         Ok(())
     }
 }
 
 impl Client {
-    pub fn get_me(&self) -> Result<&User, Error> {
-        self.session
-            .as_ref()
-            .ok_or(Error::InvalidAuth)
-            .map(|session| &session.user)
+    pub async fn get_me(&self) -> Result<User, Error> {
+        let session_lock = self.session.as_ref().ok_or(Error::InvalidAuth)?;
+        let session = session_lock.lock().await;
+
+        Ok(session.user.clone())
     }
 
     api!(get_home, Home, "homes/{home}");
