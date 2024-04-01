@@ -14,7 +14,7 @@ async fn main() {
     // Try authentication and fetch current user
     let _ = client.login().await;
 
-    let me = client.get_me().unwrap();
+    let me = client.get_me().await.unwrap();
     let home = client.get_home().await.unwrap();
     let zones = client.get_zones().await.unwrap();
 
