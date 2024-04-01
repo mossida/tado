@@ -4,7 +4,7 @@ use cnf::AUTH_SCOPE;
 use data::{
     AirComfort, AwayConfiguration, Device, DeviceUsage, EarlyStart, HeatingCircuit, HeatingSystem,
     Home, HomeState, MobileDevice, MobileDeviceSettings, StatePresence, Temperature, User, Weather,
-    Zone, ZoneState,
+    Zone, ZoneId, ZoneState,
 };
 use oauth2::{
     basic::{BasicClient, BasicTokenType},
@@ -208,10 +208,13 @@ impl Client {
 
     api!(get_home_state, HomeState, "homes/{home}/state");
 
+    api!(get_weather, Weather, "homes/{home}/weather");
+
     api!(get_devices, Vec<Device>, "homes/{home}/devices");
 
     api!(get_device_usage, DeviceUsage, "homes/{home}/deviceList");
 
+    // TODO: Add return type
     api!(get_invitations, Vec<Value>, "homes/{home}/invitations");
 
     // TODO: Add return type
@@ -219,6 +222,7 @@ impl Client {
         "email": email
     }, "homes/{home}/invitations", email: String);
 
+    // TODO: Add return type
     api!(delete_invitation, (), Method::DELETE, null, "homes/{home}/invitations/{invitation}", token: String);
 
     api!(
@@ -236,17 +240,15 @@ impl Client {
 
     api!(get_users, Vec<User>, "homes/{home}/users");
 
-    api!(get_weather, Weather, "homes/{home}/weather");
-
     api!(get_zones, Vec<Zone>, "homes/{home}/zones");
 
-    api!(get_early_start, EarlyStart, "homes/{home}/zones/{zone}/earlyStart", zone: u32);
+    api!(get_early_start, EarlyStart, "homes/{home}/zones/{zone}/earlyStart", zone: &ZoneId);
 
     api!(set_early_start, EarlyStart, Method::PUT, {
         "enabled": enabled
-    }, "homes/{home}/zones/{zone}/earlyStart", zone: u32, enabled: bool);
+    }, "homes/{home}/zones/{zone}/earlyStart", zone: &ZoneId, enabled: bool);
 
-    api!(end_manual_control, (), Method::DELETE, null, "homes/{home}/zones/{zone}/overlay", zone: u32);
+    api!(end_manual_control, (), Method::DELETE, null, "homes/{home}/zones/{zone}/overlay", zone: &ZoneId);
 
     api!(get_zone_states, Vec<ZoneState>, "homes/{home}/zoneStates");
 
@@ -291,7 +293,7 @@ impl Client {
             "celsius": offset
         },
         "devices/{device}/temperatureOffset",
-        device: String,
+        device: &String,
         offset: f32
     );
 
@@ -299,39 +301,39 @@ impl Client {
         get_away_configuration,
         AwayConfiguration,
         "homes/{home}/zones/{zone}/awayConfiguration",
-        zone: u32
+        zone: &ZoneId
     );
 
     api!(set_open_window_detection, (), Method::PUT, {
         "enabled": enabled,
         "timeoutInSeconds": timeout,
-    }, "homes/{home}/zones/{zone}/openWindowDetection", zone: u32, enabled: bool, timeout: u32);
+    }, "homes/{home}/zones/{zone}/openWindowDetection", zone: &ZoneId, enabled: bool, timeout: u32);
 
     // TODO: Type unknown
     api!(
         get_default_overlay,
         Value,
         "homes/{home}/zones/{zone}/defaultOverlay",
-        zone: u32
+        zone: &ZoneId
     );
 
-    api!(get_measuring_device, String, "homes/{home}/zones/{zone}/measuringDevice", zone: u32);
+    api!(get_measuring_device, String, "homes/{home}/zones/{zone}/measuringDevice", zone: &ZoneId);
 
-    api!(get_state, ZoneState, "homes/{home}/zones/{zone}/state", zone: u32);
+    api!(get_state, ZoneState, "homes/{home}/zones/{zone}/state", zone: &ZoneId);
 
     // TODO: Add return type
     api!(set_zone_name, (), Method::PUT, {
         "name": name
-    }, "homes/{home}/zones/{zone}/name", zone: u32, name: String);
+    }, "homes/{home}/zones/{zone}/name", zone: &ZoneId, name: String);
 
-    api!(get_schedule, String, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32);
+    api!(get_schedule, String, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: &ZoneId);
 
     // TODO: Add return type
     api!(set_schedule, (), Method::PUT, {
         "id": schedule
-    }, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: u32, schedule: u32);
+    }, "homes/{home}/zones/{zone}/schedule/activeTimetable", zone: &ZoneId, schedule: u32);
 
-    api!(get_schedule_timetables, String, "homes/{home}/zones/{zone}/schedule/timetables", zone: u32);
+    api!(get_schedule_timetables, String, "homes/{home}/zones/{zone}/schedule/timetables", zone: &u32);
 
     // TODO: Add return type
     api!(set_presence, Value, Method::PUT, {

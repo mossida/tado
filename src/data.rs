@@ -10,6 +10,14 @@ macro_rules! new_type {
             $($(#[$type_attr])* pub $field_name: $field_type,)*
         }
     };
+
+    ($name:ident <$($generic:ident),*> { $($(#[$type_attr:meta])* $field_name:ident : $field_type:ty),* $(,)? }) => {
+        #[derive(Debug, Clone, Serialize, Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        pub struct $name<$($generic),*> {
+            $($(#[$type_attr])* pub $field_name: $field_type,)*
+        }
+    };
 }
 
 macro_rules! new_enum {
@@ -26,6 +34,34 @@ macro_rules! new_enum {
     };
 }
 
+pub type ZoneId = u32;
+
+pub type HomeId = u32;
+
+pub type DeviceId = String;
+
+#[cfg(feature = "chrono")]
+pub type Date = chrono::DateTime<chrono::Utc>;
+
+#[cfg(not(feature = "chrono"))]
+pub type Date = String;
+
+#[cfg(feature = "chrono")]
+pub type Timezone = chrono_tz::Tz;
+
+#[cfg(not(feature = "chrono"))]
+pub type Timezone = String;
+
+new_type![Support {
+    enabled: bool,
+    supported: bool,
+}];
+
+new_type![Value<T> {
+    value: T,
+    timestamp: Date,
+}];
+
 new_enum![StatePresence { Home, Away, Auto }];
 
 new_enum![ZoneType {
@@ -39,9 +75,28 @@ new_type![Temperature {
     fahrenheit: f32,
 }];
 
-new_type![DeviceConnectionState {
-    value: bool,
-    timestamp: String,
+new_enum![TemperatureUnit {
+    Celsius,
+    Fahrenheit,
+}];
+
+new_enum![DeviceMountingState { Calibrated }];
+
+new_enum![DeviceBatteryState { Normal, Low }];
+
+new_enum![DeviceOrientation {
+    Horizontal,
+    Vertical,
+}];
+
+new_enum![DeviceCharacteristicsCapabilities {
+    RadioEncryptionKeyAccess,
+    InsideTemperatureMeasurement,
+    Identify,
+}];
+
+new_type![DeviceCharacteristics {
+    capabilities: Vec<DeviceCharacteristicsCapabilities>,
 }];
 
 new_type![DeviceUsageEntry {
@@ -55,11 +110,17 @@ new_type![DeviceUsage {
 
 new_type! [Device {
     device_type: String,
-    serial_no: String,
-    short_serial_no: String,
+    serial_no: DeviceId,
+    short_serial_no: DeviceId,
     current_fw_version: String,
-    connection_state: DeviceConnectionState,
+    characteristics: DeviceCharacteristics,
+    mounting_state: Option<Value<DeviceMountingState>>,
+    mounting_state_with_error: Option<DeviceMountingState>,
+    battery_state: Option<DeviceBatteryState>,
+    connection_state: Value<bool>,
+    orientation: Option<DeviceOrientation>,
     child_lock_enabled: Option<bool>,
+    in_pairing_mode: Option<bool>,
 }];
 
 new_type![MobileDeviceLocationBearingFromHome {
@@ -109,27 +170,61 @@ new_type![HomeState {
     presence_locked: bool,
 }];
 
-new_type![IncidentDetection {
-    enabled: bool,
-    supported: bool,
+new_type![HomeAddress {
+    address_line1: String,
+    address_line2: Option<String>,
+    city: String,
+    state: Option<String>,
+    zip_code: String,
+    country: String
+}];
+
+new_enum![HomeSkills { AutoAssist }];
+
+// TODO: Add more features
+new_enum![HomeFeatures {
+    SalesBannerEaster,
+    KeepWebappUpdated,
+    EnergyIqV2Details,
+    ClimateReportAsWebview,
+    AaUpsellingB,
+    EiqSettingsAsWebview,
+    EligibleForEnergyConsumption,
+    EnergyConsumption,
+    HeatingRoomDetailsAsWebview,
+    HideBoilerRepairService,
+    HomeScreenAsWebviewProd,
+    HomeScreenAsWebviewProdAndroid,
+    OwdSettingsAsWebview,
+    RoomsAndDevicesSettingAsWebview,
+    SmartScheduleAsWebview,
 }];
 
 new_type![BasicHome {
-    id: u32,
+    id: HomeId,
     name: String,
+}];
+
+new_type![Geolocation {
+    latitude: f32,
+    longitude: f32,
 }];
 
 new_type![Home {
     #[serde(flatten)]
     basic: BasicHome,
-    date_time_zone: String,
-    date_created: String,
-    temperature_unit: String,
+    address: HomeAddress,
+    geolocation: Geolocation,
+    date_time_zone: Timezone,
+    date_created: Date,
+    temperature_unit: TemperatureUnit,
     partner: Option<String>,
+    skills: Vec<HomeSkills>,
+    enabled_features: Vec<HomeFeatures>,
     simple_smart_schedule_enabled: bool,
     away_radius_in_meters: f32,
     installation_completed: bool,
-    incident_detection: IncidentDetection,
+    incident_detection: Support,
     zones_count: u32,
     christmas_mode_enabled: bool,
     show_auto_assist_reminders: bool,
@@ -150,11 +245,6 @@ new_type![User {
     mobile_devices: Vec<MobileDevice>,
 }];
 
-new_type![ZoneDazzleMode {
-    enabled: bool,
-    supported: bool,
-}];
-
 new_type![ZoneOpenWindowDetection {
     enabled: bool,
     supported: bool,
@@ -162,7 +252,7 @@ new_type![ZoneOpenWindowDetection {
 }];
 
 new_type![Zone {
-    id: u32,
+    id: ZoneId,
     name: String,
     r#type: ZoneType,
     device_types: Vec<String>,
@@ -172,25 +262,26 @@ new_type![Zone {
     show_schedule_setup: bool,
     supports_dazzle: bool,
     dazzle_enabled: bool,
-    dazzle_mode: ZoneDazzleMode,
+    dazzle_mode: Support,
     open_window_detection: ZoneOpenWindowDetection,
 }];
 
 new_type![ZoneState {
     geolocation_override: Option<bool>,
     geolocation_override_disable_time: Option<bool>,
+    open_window_detected: Option<bool>,
 }];
 
 new_type![WeatherSolarIntensity {
     percentage: f32,
-    timestamp: String,
+    timestamp: Date,
 }];
 
 new_type![WeatherOutsideTemperature {
     celsius: f32,
     fahrenheit: f32,
-    timestamp: String,
-    //precision: Temperature
+    timestamp: Date,
+    precision: Temperature
 }];
 
 new_enum![WeatherStateValue {
@@ -205,7 +296,7 @@ new_enum![WeatherStateValue {
 
 new_type![WeatherState {
     value: WeatherStateValue,
-    timestamp: String,
+    timestamp: Date,
 }];
 
 new_type![Weather {
