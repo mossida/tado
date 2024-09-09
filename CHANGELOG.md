@@ -6,6 +6,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0](https://github.com/mossida/tado/compare/v1.1.0...v2.0.0) - 2024-09-09
+
+### Added
+
+- add 'isDriverConfigured' prop to device
+- manully release
+
+### Other
+
+- *(deps)* update chrono-tz requirement from 0.9.0 to 0.10.0 ([#4](https://github.com/mossida/tado/pull/4))
+- *(deps)* update chrono-tz requirement from 0.8.6 to 0.9.0 ([#3](https://github.com/mossida/tado/pull/3))
+
 ## [1.1.0](https://github.com/mossida/tado/compare/v1.0.0...v1.1.0) - 2024-04-01
 
 ### Added
